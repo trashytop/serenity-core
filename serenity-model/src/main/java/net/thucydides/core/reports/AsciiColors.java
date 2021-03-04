@@ -1,7 +1,5 @@
 package net.thucydides.core.reports;
 
-import cucumber.api.formatter.AnsiEscapes;
-import net.serenitybdd.core.CurrentOS;
 import net.thucydides.core.ThucydidesSystemProperty;
 import net.thucydides.core.util.EnvironmentVariables;
 
@@ -19,8 +17,7 @@ public class AsciiColors {
         this.isBold = isBold;
     }
     private boolean showColoredOutput() {
-        Boolean defaultValue = (!CurrentOS.isWindows());
-        return ThucydidesSystemProperty.SERENITY_CONSOLE_COLORS.booleanFrom(environmentVariables,defaultValue);
+        return ThucydidesSystemProperty.SERENITY_CONSOLE_COLORS.booleanFrom(environmentVariables, false);
     }
 
     public AsciiColors bold() {

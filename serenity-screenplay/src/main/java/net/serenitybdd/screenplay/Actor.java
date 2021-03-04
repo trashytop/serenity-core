@@ -15,7 +15,6 @@ import net.thucydides.core.guice.Injectors;
 import net.thucydides.core.steps.ExecutedStepDescription;
 import net.thucydides.core.steps.StepEventBus;
 import net.thucydides.core.util.EnvironmentVariables;
-import org.openqa.selenium.Keys;
 
 import java.lang.reflect.Method;
 import java.util.*;
@@ -145,12 +144,16 @@ public class Actor implements PerformsTasks, SkipNested {
         attemptsTo(todos);
     }
 
+    private List<FactLifecycleListener> factListeners = new ArrayList<>();
+
     public final void has(Fact... facts) {
         Arrays.stream(facts).forEach(
                 fact -> {
                     fact.setup(this);
                     eventBusInterface.assignFactToActor(this, fact.toString());
-                    StepEventBus.getEventBus().registerListener(new FactLifecycleListener(this, fact));
+                    FactLifecycleListener listener = new FactLifecycleListener(this, fact);
+                    factListeners.add(listener);
+                    StepEventBus.getEventBus().registerListener(listener);
                 }
         );
     }
@@ -197,6 +200,7 @@ public class Actor implements PerformsTasks, SkipNested {
         }
     }
 
+    @Override
     public <ANSWER> ANSWER asksFor(Question<ANSWER> question) {
         beginPerformance();
         ANSWER answer = question.answeredBy(this);
@@ -363,6 +367,9 @@ public class Actor implements PerformsTasks, SkipNested {
         return new HashMap<>(notepad);
     }
 
+    @SuppressWarnings("unchecked")
+    public <T> T forget(String key) { return (T) notepad.remove(key);}
+
     public <T> T sawAsThe(String key) {
         return recall(key);
     }
@@ -417,5 +424,13 @@ public class Actor implements PerformsTasks, SkipNested {
     private boolean manualTaskInstrumentation() {
         EnvironmentVariables environmentVariables = Injectors.getInjector().getInstance(EnvironmentVariables.class);
         return (MANUAL_TASK_INSTRUMENTATION.booleanFrom(environmentVariables, false));
+    }
+
+    public void wrapUp() {
+        getTeardowns().forEach(HasTeardown::tearDown);
+        factListeners.forEach(
+                factLifecycleListener -> StepEventBus.getEventBus().dropListener(factLifecycleListener)
+        );
+
     }
 }

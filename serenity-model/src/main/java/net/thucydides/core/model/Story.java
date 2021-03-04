@@ -6,14 +6,11 @@ import net.thucydides.core.annotations.Feature;
 import net.thucydides.core.guice.Injectors;
 import net.thucydides.core.model.features.ApplicationFeature;
 import net.thucydides.core.reports.html.ReportNameProvider;
+import net.thucydides.core.requirements.RootDirectory;
 import net.thucydides.core.requirements.model.FeatureType;
 import net.thucydides.core.util.EnvironmentVariables;
 import org.apache.commons.lang3.StringUtils;
 
-import java.net.URL;
-import java.util.Set;
-
-import static net.thucydides.core.model.ReportType.ROOT;
 import static net.thucydides.core.util.NameConverter.humanize;
 import static org.apache.commons.lang3.StringUtils.isNotEmpty;
 
@@ -290,8 +287,13 @@ public class Story {
     }
 
     public TestTag asQualifiedTag() {
-        String parentName = (getPath() != null) ? humanize(LastElement.of(getPath())) : null;
-
+        EnvironmentVariables environmentVariables = Injectors.getInjector().getInstance(EnvironmentVariables.class);
+        String featureDirectoryName = RootDirectory.definedIn(environmentVariables).featureDirectoryName();
+        String lastElementOfPath = LastElement.of(getPath());
+        String parentName = (getPath() != null) ? humanize(lastElementOfPath) : null;
+        if(featureDirectoryName.equalsIgnoreCase(lastElementOfPath)) {
+            parentName = null;
+        }
         return (isNotEmpty(parentName)) ?
                 TestTag.withName(parentName + "/" + storyName).andType(type) :
                 TestTag.withName(storyName).andType(type);

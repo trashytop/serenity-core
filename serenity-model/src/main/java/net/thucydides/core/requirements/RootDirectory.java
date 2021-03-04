@@ -1,6 +1,5 @@
 package net.thucydides.core.requirements;
 
-import net.serenitybdd.core.time.Stopwatch;
 import net.thucydides.core.ThucydidesSystemProperty;
 import net.thucydides.core.configuration.SystemPropertiesConfiguration;
 import net.thucydides.core.util.EnvironmentVariables;
@@ -16,7 +15,6 @@ import java.net.URL;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
-import java.time.Duration;
 import java.util.*;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
@@ -357,7 +355,10 @@ public class RootDirectory {
                 return relativePathFromAbsolutePath(path, requirementsDirectory).get();
             }
         }
-        return Paths.get(path);
+        if (path.startsWith("classpath:")) {
+            return Paths.get(path.substring(10));
+        }
+        return new File(path).toPath();
     }
 
     private Optional<Path> relativePathFromAbsolutePath(String absolutePath, String requirementsDirectory) {

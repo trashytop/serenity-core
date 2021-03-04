@@ -5,7 +5,6 @@ import net.serenitybdd.core.strings.Joiner;
 import net.serenitybdd.screenplay.actions.KeyNames;
 import org.openqa.selenium.Keys;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -35,6 +34,8 @@ public class RenderEnteredText {
 
 
     public static String getTextAsStringFor(CharSequence... theText) {
+        
+        if (theText == null) { return ""; }
 
         return stream(theText).map(
                 textValue -> (textValue instanceof Keys) ? ((Keys) textValue).name() : "'" + textValue.toString() + "'"

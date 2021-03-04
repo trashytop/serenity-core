@@ -1,8 +1,8 @@
 package net.thucydides.core.csv;
 
 import au.com.bytecode.opencsv.CSVReader;
-import net.thucydides.core.steps.stepdata.TestDataSource;
 import net.thucydides.core.steps.stepdata.CSVTestDataSource;
+import net.thucydides.core.steps.stepdata.TestDataSource;
 import net.thucydides.core.util.ExtendedTemporaryFolder;
 import org.junit.Before;
 import org.junit.Rule;
@@ -12,6 +12,7 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.List;
 import java.util.Map;
 
@@ -27,7 +28,7 @@ public class WhenLoadingTestDataFromACSVFile {
 
     @Before
     public void setupTemporaryDirectory() throws IOException {
-        temporaryDirectory = temporaryFolder.newFolder("testdata");
+        temporaryDirectory = Files.createTempDirectory("testdata").toFile();
     }
 
     protected File useTestDataIn(String filename, String... data) throws IOException {

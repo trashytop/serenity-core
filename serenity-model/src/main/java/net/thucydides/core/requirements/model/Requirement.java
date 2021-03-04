@@ -2,18 +2,16 @@ package net.thucydides.core.requirements.model;
 
 import com.google.common.base.Preconditions;
 import net.serenitybdd.core.collect.NewList;
-import net.thucydides.core.model.LastElement;
 import net.thucydides.core.model.TestTag;
-import net.thucydides.core.requirements.AllRequirements;
 import org.apache.commons.collections.ListUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import java.io.File;
 import java.util.*;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static net.thucydides.core.model.TestTag.DEFAULT_TAG_TYPE;
 import static org.apache.commons.lang3.StringUtils.isEmpty;
 
 /**
@@ -436,6 +434,12 @@ public class Requirement implements Comparable {
     }
 
     public Requirement withScenarioTags(Map<String, Collection<TestTag>> scenarioTags) {
+        if(!tags.isEmpty() && this.scenarioTags.isEmpty()) {
+            List<TestTag> testTags = tags.stream().filter(testTag -> DEFAULT_TAG_TYPE.equals(testTag.getType())).collect(Collectors.toList());
+            for (Collection<TestTag> currentScenarioTag : scenarioTags.values()) {
+                currentScenarioTag.addAll(testTags);
+            }
+        }
         return new Requirement(this.name, this.id, this.displayName, this.cardNumber, parent, this.type, this.path, this.narrative,
                 children, examples, releaseVersions, customFields, featureFileName, this.tags, scenarioTags, containsNoScenarios);
     }

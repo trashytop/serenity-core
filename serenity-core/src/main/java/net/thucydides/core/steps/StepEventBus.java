@@ -6,7 +6,6 @@ import net.serenitybdd.core.Serenity;
 import net.serenitybdd.core.collect.NewList;
 import net.serenitybdd.core.environment.ConfiguredEnvironment;
 import net.serenitybdd.core.eventbus.Broadcaster;
-import net.serenitybdd.core.webdriver.enhancers.AtTheEndOfAWebDriverTest;
 import net.thucydides.core.ThucydidesSystemProperty;
 import net.thucydides.core.events.TestLifecycleEvents;
 import net.thucydides.core.model.*;
@@ -14,9 +13,11 @@ import net.thucydides.core.util.EnvironmentVariables;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Closeable;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.stream.Collectors;
 
 import static net.thucydides.core.ThucydidesSystemProperty.SERENITY_ENABLE_WEBDRIVER_IN_FIXTURE_METHODS;
 
@@ -271,6 +272,7 @@ public class StepEventBus {
         webdriverSuspensions.clear();
 
         Broadcaster.unregisterAllListeners();
+        dropClosableListeners();
     }
 
     private boolean clearSessionForEachTest() {
@@ -481,6 +483,10 @@ public class StepEventBus {
         registeredListeners.remove(stepListener);
     }
 
+    private void dropClosableListeners() {
+        registeredListeners = registeredListeners.stream().filter( stepListener -> (!(stepListener instanceof Droppable))).collect(Collectors.toList());
+    }
+
     public void dropAllListeners() {
         registeredListeners.clear();
     }
@@ -661,6 +667,10 @@ public class StepEventBus {
         getBaseStepListener().getCurrentTestOutcome().setBackgroundDescription(description);
     }
 
+    public void setRule(Rule rule) {
+        getBaseStepListener().getCurrentTestOutcome().setRule(rule);
+    }
+
     public void useExamplesFrom(DataTable table) {
         for (StepListener stepListener : getAllListeners()) {
             stepListener.useExamplesFrom(table);
@@ -676,6 +686,12 @@ public class StepEventBus {
     public void exampleStarted(Map<String, String> data) {
         for (StepListener stepListener : getAllListeners()) {
             stepListener.exampleStarted(data);
+        }
+    }
+
+    public void exampleStarted(Map<String, String> data, String exampleName) {
+        for (StepListener stepListener : getAllListeners()) {
+            stepListener.exampleStarted(data, exampleName);
         }
     }
 

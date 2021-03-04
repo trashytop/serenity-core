@@ -1,11 +1,6 @@
 package net.thucydides.core.util;
 
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Inherited;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
-
+import net.thucydides.core.tags.Taggable;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Ignore;
@@ -20,7 +15,7 @@ import org.junit.runners.BlockJUnit4ClassRunner;
 import org.junit.runners.JUnit4;
 import org.junit.runners.model.InitializationError;
 
-import net.thucydides.core.tags.Taggable;
+import java.lang.annotation.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -90,7 +85,7 @@ public class JUnitAdapterUnitTest {
     public static class Junit4Test {
 
         @BeforeClass
-        public void beforeClass() {
+        public static void beforeClass() {
         }
 
         @Before
@@ -110,12 +105,16 @@ public class JUnitAdapterUnitTest {
 
     @RunWith(InternalRunner.class)
     public static class TaggableJunit4Test {
-
+        @Test
+        public void shouldSucceed() {
+        }
     }
 
     @RunWith(SerenityRunner.class)
     public static class SerenityJunit4Test {
-
+        @Test
+        public void shouldSucceed() {
+        }
     }
 
     public static class InternalRunner extends BlockJUnit4ClassRunner implements Taggable {
@@ -135,7 +134,7 @@ public class JUnitAdapterUnitTest {
     static class Junit5Test {
 
         @BeforeAll
-        void beforeAll() {
+        static void beforeAll() {
 
         }
 

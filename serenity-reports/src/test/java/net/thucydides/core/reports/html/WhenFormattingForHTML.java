@@ -153,13 +153,6 @@ public class WhenFormattingForHTML {
     }
 
     @Test
-    public void formatter_should_render_multiline_asciidoc() {
-        Formatter formatter = new Formatter();
-        String formatted = formatter.renderAsciidoc("a quick *brown* fox\njumped over a log");
-        assertThat(formatted, is("a quick <strong>brown</strong> fox<br>jumped over a log"));
-    }
-
-    @Test
     public void formatter_should_render_asciidoc_if_configured() {
         EnvironmentVariables environmentVariables = new MockEnvironmentVariables();
         environmentVariables.setProperty("narrative.format","asciidoc");
@@ -260,6 +253,23 @@ public class WhenFormattingForHTML {
         Formatter formatter = new Formatter(environmentVariables);
         String formatted = formatter.renderDescription(htmlDescription);
         assertThat(formatted, is(htmlDescription));
+    }
+
+    @Test
+    public void formatter_should_convert_simple_html_tags_in_titles() {
+        EnvironmentVariables environmentVariables = new MockEnvironmentVariables();
+        Formatter formatter = new Formatter(environmentVariables);
+        String formatted = formatter.renderTitle("some <tag>");
+        assertThat(formatted, is("some &lt;tag&gt;"));
+    }
+
+
+    @Test
+    public void formatter_should_convert_empty_html_tags_in_titles() {
+        EnvironmentVariables environmentVariables = new MockEnvironmentVariables();
+        Formatter formatter = new Formatter(environmentVariables);
+        String formatted = formatter.renderTitle("Some title including <> in it");
+        assertThat(formatted, is("Some title including &lt;&gt; in it"));
     }
 
     @Test

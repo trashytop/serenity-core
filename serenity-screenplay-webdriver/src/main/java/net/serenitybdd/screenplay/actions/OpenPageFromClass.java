@@ -7,15 +7,14 @@ import net.serenitybdd.screenplay.abilities.BrowseTheWeb;
 import net.thucydides.core.annotations.Step;
 import net.thucydides.core.pages.Pages;
 import net.thucydides.core.util.NameConverter;
-import org.openqa.selenium.support.PageFactory;
 
 public class OpenPageFromClass implements Interaction {
 
     private String targetPageName;
+    private Class<? extends PageObject> targetPageClass;
 
-    private final Class<PageObject> targetPageClass;
-
-    public OpenPageFromClass(Class<PageObject> targetPageClass) {
+    public OpenPageFromClass() {}
+    public OpenPageFromClass(Class<? extends PageObject> targetPageClass) {
         this.targetPageClass = targetPageClass;
         this.targetPageName = NameConverter.humanize(targetPageClass.getSimpleName());
     }
@@ -26,5 +25,4 @@ public class OpenPageFromClass implements Interaction {
         targetPage.setDriver(BrowseTheWeb.as(theUser).getDriver());
         targetPage.open();
     }
-
 }

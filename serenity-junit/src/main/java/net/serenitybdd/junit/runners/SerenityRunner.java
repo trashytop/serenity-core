@@ -1,37 +1,49 @@
 package net.serenitybdd.junit.runners;
 
-import com.google.inject.*;
-import net.serenitybdd.core.*;
-import net.serenitybdd.core.environment.*;
-import net.serenitybdd.core.injectors.*;
-import net.thucydides.core.ThucydidesSystemProperty;
-import net.thucydides.core.annotations.*;
-import net.thucydides.core.batches.*;
-import net.thucydides.core.guice.*;
-import net.thucydides.core.guice.webdriver.*;
-import net.thucydides.core.model.*;
-import net.thucydides.core.pages.*;
-import net.thucydides.core.reports.*;
-import net.thucydides.core.steps.*;
-import net.thucydides.core.steps.stepdata.*;
-import net.thucydides.core.tags.*;
+import com.google.inject.Injector;
+import net.serenitybdd.core.Serenity;
+import net.serenitybdd.core.environment.WebDriverConfiguredEnvironment;
+import net.serenitybdd.core.injectors.EnvironmentDependencyInjector;
+import net.serenitybdd.core.lifecycle.LifecycleRegister;
+import net.thucydides.core.annotations.ManagedWebDriverAnnotatedField;
+import net.thucydides.core.annotations.ManualTestMarkedAsError;
+import net.thucydides.core.annotations.ManualTestMarkedAsFailure;
+import net.thucydides.core.annotations.TestCaseAnnotations;
+import net.thucydides.core.batches.BatchManager;
+import net.thucydides.core.batches.BatchManagerProvider;
+import net.thucydides.core.guice.Injectors;
+import net.thucydides.core.guice.webdriver.WebDriverModule;
+import net.thucydides.core.model.TestOutcome;
+import net.thucydides.core.pages.Pages;
+import net.thucydides.core.reports.AcceptanceTestReporter;
+import net.thucydides.core.reports.ReportService;
+import net.thucydides.core.steps.PageObjectDependencyInjector;
+import net.thucydides.core.steps.StepAnnotations;
+import net.thucydides.core.steps.StepEventBus;
+import net.thucydides.core.steps.StepFactory;
+import net.thucydides.core.steps.stepdata.StepData;
+import net.thucydides.core.tags.TagScanner;
+import net.thucydides.core.tags.Taggable;
 import net.thucydides.core.webdriver.*;
-import net.thucydides.junit.listeners.*;
-import org.junit.runner.*;
-import org.junit.runner.notification.*;
-import org.junit.runners.*;
-import org.junit.runners.model.*;
-import org.openqa.selenium.*;
-import org.slf4j.*;
+import net.thucydides.junit.listeners.JUnitStepListener;
+import org.junit.runner.Description;
+import org.junit.runner.notification.Failure;
+import org.junit.runner.notification.RunNotifier;
+import org.junit.runners.BlockJUnit4ClassRunner;
+import org.junit.runners.model.FrameworkMethod;
+import org.junit.runners.model.InitializationError;
+import org.junit.runners.model.Statement;
+import org.openqa.selenium.WebDriver;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.io.*;
+import java.io.File;
 import java.util.*;
 import java.util.function.Consumer;
 
-import static net.serenitybdd.core.Serenity.*;
-import static net.thucydides.core.ThucydidesSystemProperty.*;
+import static net.thucydides.core.ThucydidesSystemProperty.TEST_RETRY_COUNT;
 import static net.thucydides.core.model.TestResult.FAILURE;
-import static org.apache.commons.lang3.StringUtils.*;
+import static org.apache.commons.lang3.StringUtils.isEmpty;
 
 /**
  * A test runner for WebDriver-based web tests. This test runner initializes a
@@ -44,12 +56,7 @@ import static org.apache.commons.lang3.StringUtils.*;
  */
 public class SerenityRunner extends BlockJUnit4ClassRunner implements Taggable {
 
-    /**
-     * Provides a proxy of the ScenarioSteps object used to invoke the test steps.
-     * This proxy notifies the test runner about individual step outcomes.
-     */
-    private StepFactory stepFactory;
-    private Pages pages;
+    private ThreadLocal<Pages> pages = new ThreadLocal<>();
     private final WebdriverManager webdriverManager;
     private String requestedDriver;
     private ReportService reportService;
@@ -77,7 +84,7 @@ public class SerenityRunner extends BlockJUnit4ClassRunner implements Taggable {
     private final Logger logger = LoggerFactory.getLogger(SerenityRunner.class);
 
     public Pages getPages() {
-        return pages;
+        return pages.get();
     }
 
     /**
@@ -164,6 +171,7 @@ public class SerenityRunner extends BlockJUnit4ClassRunner implements Taggable {
         this.batchManager = batchManager;
 
         batchManager.registerTestCase(klass);
+        LifecycleRegister.register(theTest);
 
     }
 
@@ -332,7 +340,6 @@ public class SerenityRunner extends BlockJUnit4ClassRunner implements Taggable {
             initStepFactoryUsing(getPages());
         } else {
             setStepListener(initListeners());
-            initStepFactory();
         }
     }
 
@@ -351,8 +358,8 @@ public class SerenityRunner extends BlockJUnit4ClassRunner implements Taggable {
     }
 
     private void initPagesObjectUsing(final WebDriver driver) {
-        pages = new Pages(driver, getConfiguration());
-        dependencyInjector = new PageObjectDependencyInjector(pages);
+        pages.set(new Pages(driver, getConfiguration()));
+        dependencyInjector = new PageObjectDependencyInjector();
     }
 
     protected JUnitStepListener initListenersUsing(final Pages pageFactory) {
@@ -374,11 +381,7 @@ public class SerenityRunner extends BlockJUnit4ClassRunner implements Taggable {
     }
 
     private void initStepFactoryUsing(final Pages pagesObject) {
-        stepFactory = StepFactory.getFactory().usingPages(pagesObject);
-    }
-
-    private void initStepFactory() {
-        stepFactory = StepFactory.getFactory();
+        StepFactory.getFactory().usingPages(pagesObject);
     }
 
     private ReportService getReportService() {
@@ -446,14 +449,15 @@ public class SerenityRunner extends BlockJUnit4ClassRunner implements Taggable {
                              RerunTest rerunTest) {
         if (remainingTries <= 0) { return; }
 
-        logger.info(rerunTest.toString() + ": attempt " + (maxRetries() - remainingTries));
+        int attemptNum = maxRetries() - remainingTries + 1;
+        logger.info(rerunTest.toString() + ": attempt " + attemptNum);
         StepEventBus.getEventBus().cancelPreviousTest();
         rerunTest.perform();
 
         if (failureDetectingStepListener.lastTestFailed()) {
             retryAtMost(remainingTries - 1, rerunTest);
         } else {
-            StepEventBus.getEventBus().lastTestPassedAfterRetries(remainingTries,
+            StepEventBus.getEventBus().lastTestPassedAfterRetries(attemptNum,
                                                                   failureDetectingStepListener.getFailureMessages(),failureDetectingStepListener.getTestFailureCause());
         }
     }
@@ -495,7 +499,7 @@ public class SerenityRunner extends BlockJUnit4ClassRunner implements Taggable {
 
     private void resetStepLibrariesIfRequired() {
         if (theTest.shouldResetStepLibraries()) {
-            stepFactory.reset();
+            StepFactory.getFactory().reset();
         }
     }
 
@@ -527,14 +531,6 @@ public class SerenityRunner extends BlockJUnit4ClassRunner implements Taggable {
 
                 }
         );
-
-        List<Integer> ages = Arrays.asList(20,40,50,15,80);
-
-        int totalAges = 0;
-        for(int age : ages) {
-            totalAges = totalAges + age;
-        }
-        double average = totalAges / ages.size();
 
         switch(theMethod.getManualResult()) {
             case SUCCESS:
@@ -614,7 +610,7 @@ public class SerenityRunner extends BlockJUnit4ClassRunner implements Taggable {
     }
 
     private void useStepFactoryForDataDrivenSteps() {
-        StepData.setDefaultStepFactory(stepFactory);
+        StepData.setDefaultStepFactory(StepFactory.getFactory());
     }
 
     /**
@@ -642,7 +638,7 @@ public class SerenityRunner extends BlockJUnit4ClassRunner implements Taggable {
      * @param testCase A Serenity-annotated test class
      */
     protected void injectScenarioStepsInto(final Object testCase) {
-        StepAnnotations.injector().injectScenarioStepsInto(testCase, stepFactory);
+        StepAnnotations.injector().injectScenarioStepsInto(testCase, StepFactory.getFactory());
     }
 
     /**
@@ -650,7 +646,7 @@ public class SerenityRunner extends BlockJUnit4ClassRunner implements Taggable {
      * @param testCase A Serenity-annotated test class
          */
     protected void injectAnnotatedPagesObjectInto(final Object testCase) {
-        StepAnnotations.injector().injectAnnotatedPagesObjectInto(testCase, pages);
+        StepAnnotations.injector().injectAnnotatedPagesObjectInto(testCase, pages.get());
     }
 
     protected void injectEnvironmentVariablesInto(final Object testCase) {

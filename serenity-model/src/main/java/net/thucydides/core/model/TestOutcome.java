@@ -25,6 +25,7 @@ import net.thucydides.core.model.stacktrace.FailureCause;
 import net.thucydides.core.model.stacktrace.RootCauseAnalyzer;
 import net.thucydides.core.reports.json.JSONConverter;
 import net.thucydides.core.reports.remoteTesting.LinkGenerator;
+import net.thucydides.core.requirements.reports.ScenarioOutcome;
 import net.thucydides.core.screenshots.ScreenshotAndHtmlSource;
 import net.thucydides.core.statistics.service.TagProvider;
 import net.thucydides.core.statistics.service.TagProviderService;
@@ -35,7 +36,7 @@ import net.thucydides.core.util.EnvironmentVariables;
 import net.thucydides.core.util.NameConverter;
 import org.apache.commons.io.output.ByteArrayOutputStream;
 import org.apache.commons.lang3.StringUtils;
-import org.joda.time.DateTime;
+//import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,9 +62,9 @@ import static org.apache.commons.lang3.StringUtils.isNotBlank;
 /**
  * Represents the results of a test (or "scenario") execution. This
  * includes the narrative steps taken during the test, screenshots at each step,
- * the results of each step, and the overall result. A test scenario
+ * the results of each step, and the overall result. A test getscenario
  * can be associated with a user story using the UserStory annotation.
- * <p/>
+ *
  * A TestOutcome is stored after a test is executed. When the aggregate reports
  * are generated, the test outcome files are loaded into memory and processed.
  *
@@ -140,6 +141,8 @@ public class TestOutcome {
      */
     private String project;
 
+    private Rule rule;
+
     private FailureCause testFailureCause;
     private TestFailureCause flakyTestFailureCause;
     private String testFailureClassname;
@@ -198,13 +201,6 @@ public class TestOutcome {
 
     private transient FlagProvider flagProvider;
 
-
-    /**
-     * Test statistics, read from the statistics database.
-     * This data is only loaded when required, and added to the TestOutcome using the corresponding setter.
-     */
-//    private TestStatistics statistics;
-
     /**
      * Returns a set of tag provider classes that are used to determine the tags to associate with a test outcome.
      */
@@ -246,6 +242,12 @@ public class TestOutcome {
     private ExternalLink externalLink;
 
     /**
+     * An indication of the order of appearance that this scenario should appear in the story or feature.
+     * Used for JUnit tests.
+     */
+    private Integer order;
+
+    /**
      * Fields used for serialization
      */
     TestResult result;
@@ -256,7 +258,6 @@ public class TestOutcome {
      * Scenario outline text.
      */
     private String scenarioOutline;
-
 
     private static final Logger LOGGER = LoggerFactory.getLogger(TestOutcome.class);
 
@@ -400,7 +401,9 @@ public class TestOutcome {
     public EnvironmentVariables getEnvironmentVariables() {
         if (environmentVariables == null) {
             environmentVariables = Injectors.getInjector().getProvider(EnvironmentVariables.class).get();
-            this.context = contextFrom(environmentVariables);
+            if(this.context==null){
+                this.context = contextFrom(environmentVariables);
+            }
         }
         return environmentVariables;
     }
@@ -434,6 +437,7 @@ public class TestOutcome {
         this.flagProvider = Injectors.getInjector().getInstance(FlagProvider.class);
         this.environmentVariables = environmentVariables;
         this.context = contextFrom(environmentVariables);
+        this.order = TestCaseOrder.definedIn(testCase, name);
 
         this.projectKey = ThucydidesSystemProperty.THUCYDIDES_PROJECT_KEY.from(environmentVariables, "");
     }
@@ -743,11 +747,11 @@ public class TestOutcome {
     }
 
     public TitleBuilder getUnqualified() {
-        return new TitleBuilder(this, issueTracking, environmentVariables, false);
+        return new TitleBuilder(this, issueTracking, getEnvironmentVariables(), false);
     }
 
     public TitleBuilder getQualified() {
-        return new TitleBuilder(this, issueTracking, environmentVariables, true);
+        return new TitleBuilder(this, issueTracking, getEnvironmentVariables(), true);
     }
 
     public void setAllStepsTo(TestResult result) {
@@ -1780,6 +1784,14 @@ public class TestOutcome {
         return this;
     }
 
+    public Rule getRule() {
+        return rule;
+    }
+
+    public void setRule(Rule rule) {
+        this.rule = rule;
+    }
+
     public String getProject() {
         return project;
     }
@@ -1917,7 +1929,7 @@ public class TestOutcome {
 
     public List<String> getIssueKeys() {
         return getIssues().stream()
-                .map(issue -> IssueKeyFormat.forEnvironment(environmentVariables).andKey(issue))
+                .map(issue -> IssueKeyFormat.forEnvironment(getEnvironmentVariables()).andKey(issue))
                 .collect(Collectors.toList());
     }
 
@@ -1947,10 +1959,18 @@ public class TestOutcome {
 
     public String getContext() {
         if (context == null) {
-            context = contextFrom(environmentVariables);
+            context = contextFrom(getEnvironmentVariables());
         }
 
         return context;
+    }
+    
+    /**
+     * Setting the context
+     * @param context
+     */
+    public void setContext(String context) {
+    	this.context = context;
     }
 
     /**
@@ -2112,21 +2132,6 @@ public class TestOutcome {
 
     public void setStartTime(ZonedDateTime startTime) {
         this.startTime = startTime;
-    }
-
-    @Deprecated
-    public void setStartTime(DateTime startTime) {
-        ZonedDateTime time =
-                ZonedDateTime.of(startTime.year().get(),
-                        startTime.monthOfYear().get(),
-                        startTime.dayOfMonth().get(),
-                        startTime.hourOfDay().get(),
-                        startTime.minuteOfHour().get(),
-                        startTime.secondOfMinute().get(),
-                        startTime.millisOfSecond().get() * 1000,
-                        ZoneId.systemDefault());
-
-        this.startTime = time;
     }
 
     public void clearStartTime() {
@@ -2547,10 +2552,13 @@ public class TestOutcome {
     @Override
     public int hashCode() {
         int result = name != null ? name.hashCode() : 0;
-        result = 31 * result + (testCase != null ? testCase.hashCode() : 0);
-        result = 31 * result + (userStory != null ? userStory.hashCode() : 0);
-        result = 31 * result + (title != null ? title.hashCode() : 0);
+        result = 31 * result + (id != null ? id.hashCode() : 0);
+        result = 31 * result + (name != null ? name.hashCode() : 0);
         result = 31 * result + (qualifier != null ? qualifier.hashCode() : 0);
+        result = 31 * result + (context != null ? context.hashCode() : 0);
+        result = 31 * result + (testCaseName != null ? testCaseName.hashCode() : 0);
+        result = 31 * result + (title != null ? title.hashCode() : 0);
+        result = 31 * result + (userStory != null ? userStory.hashCode() : 0);
         result = 31 * result + (manual ? 1 : 0);
         return result;
     }
@@ -2720,5 +2728,14 @@ public class TestOutcome {
 
     public ExternalLink getExternalLink() {
         return externalLink;
+    }
+
+    public void setOrder(int order) {
+        this.order = order;
+    }
+
+    public Integer getOrder() {
+        if (order == null) { return 0; }
+        return order;
     }
 }

@@ -1,6 +1,7 @@
 package net.thucydides.core.requirements.annotations;
 
 import com.google.common.reflect.ClassPath;
+import net.thucydides.core.util.JUnitAdapter;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
@@ -8,14 +9,11 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
-import net.thucydides.core.util.JUnitAdapter;
-
 public class ClassInfoAnnotations {
 
     private final ClassPath.ClassInfo classInfo;
 
     public ClassInfoAnnotations(ClassPath.ClassInfo classInfo) {
-
         this.classInfo = classInfo;
     }
 
@@ -47,8 +45,14 @@ public class ClassInfoAnnotations {
 
     private Set<Method> allMethods() {
         Set<Method> allMethods = new HashSet<>();
-        allMethods.addAll(Arrays.asList(classInfo.load().getMethods()));
-        allMethods.addAll(Arrays.asList(classInfo.load().getDeclaredMethods()));
+        try {
+            allMethods.addAll(Arrays.asList(classInfo.load().getMethods()));
+        } catch (java.lang.NoClassDefFoundError ignored) {}
+
+        try {
+            allMethods.addAll(Arrays.asList(classInfo.load().getDeclaredMethods()));
+        } catch (java.lang.NoClassDefFoundError ignored) {}
+
         return allMethods;
     }
 }

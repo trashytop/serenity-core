@@ -6,11 +6,11 @@ import net.serenitybdd.screenplay.Interaction;
 import net.serenitybdd.screenplay.abilities.BrowseTheWeb;
 import net.thucydides.core.annotations.Step;
 
-import static net.serenitybdd.screenplay.Tasks.instrumented;
-
 public class OpenPage implements Interaction {
 
-    private final PageObject targetPage;
+    private PageObject targetPage;
+
+    public OpenPage() {}
 
     public OpenPage(PageObject targetPage) {
         this.targetPage = targetPage;
@@ -21,5 +21,4 @@ public class OpenPage implements Interaction {
         targetPage.setDriver(BrowseTheWeb.as(theUser).getDriver());
         targetPage.open();
     }
-
 }

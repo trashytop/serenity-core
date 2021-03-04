@@ -1,34 +1,36 @@
 package net.thucydides.core.requirements.model.cucumber;
 
 import com.google.common.base.Splitter;
-import cucumber.runtime.CucumberException;
-import cucumber.runtime.io.MultiLoader;
-import cucumber.runtime.io.ResourceLoader;
-import cucumber.runtime.model.CucumberFeature;
-import gherkin.ParserException;
-import gherkin.ast.*;
+import io.cucumber.core.feature.FeatureParser;
+import io.cucumber.core.gherkin.FeatureParserException;
+import io.cucumber.core.gherkin.messages.internal.gherkin.Gherkin;
+import io.cucumber.core.resource.Resource;
+import io.cucumber.messages.IdGenerator;
+import io.cucumber.messages.Messages.Envelope;
+import io.cucumber.messages.Messages.GherkinDocument;
+import io.cucumber.messages.Messages.GherkinDocument.Feature;
+import io.cucumber.messages.Messages.GherkinDocument.Feature.FeatureChild;
+import io.cucumber.messages.Messages.GherkinDocument.Feature.Scenario;
+import io.cucumber.messages.Messages.GherkinDocument.Feature.Scenario.Examples;
+import io.cucumber.messages.Messages.GherkinDocument.Feature.Tag;
 import net.serenitybdd.core.environment.ConfiguredEnvironment;
-import net.serenitybdd.core.exceptions.SerenityManagedException;
 import net.thucydides.core.ThucydidesSystemProperty;
 import net.thucydides.core.model.TestTag;
-import net.thucydides.core.model.TestType;
 import net.thucydides.core.reports.html.CucumberTagConverter;
 import net.thucydides.core.requirements.model.Narrative;
-import net.thucydides.core.requirements.reports.ScenarioOutcome;
 import net.thucydides.core.util.EnvironmentVariables;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.net.URI;
 import java.nio.charset.Charset;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 import static java.lang.System.lineSeparator;
-import static java.util.Arrays.stream;
 
 
 /**
@@ -69,79 +71,86 @@ public class CucumberParser {
 
         List<String> listOfFiles = new ArrayList<>();
         listOfFiles.add(narrativeFile.getAbsolutePath());
-        MultiLoader multiLoader = new MultiLoader(CucumberParser.class.getClassLoader());
-        List<CucumberFeature> cucumberFeatures = loadCucumberFeatures(multiLoader, listOfFiles);
+
+        List<GherkinDocument> gherkinDocuments = loadCucumberFeatures(listOfFiles);
         try {
-            if (cucumberFeatures.size() == 0) {
+            if (gherkinDocuments.size() == 0) {
                 return Optional.empty();
             }
-            CucumberFeature cucumberFeature = cucumberFeatures.get(0);
+            GherkinDocument gherkinDocument = gherkinDocuments.get(0);
 
-            List<ScenarioDefinition> scenarios = cucumberFeature.getGherkinFeature().getFeature().getChildren();
-
-            GherkinDocument gherkinDocument = cucumberFeature.getGherkinFeature();
-
-            String descriptionInComments = NarrativeFromCucumberComments.in(gherkinDocument.getComments());
+            String descriptionInComments = NarrativeFromCucumberComments.in(gherkinDocument.getCommentsList());
 
             if (featureFileCouldNotBeReadFor(gherkinDocument.getFeature())) {
                 return Optional.empty();
             }
+            List<Scenario> scenarioList = gherkinDocument.getFeature().getChildrenList().stream().filter(Feature.FeatureChild::hasScenario).map(Feature.FeatureChild::getScenario).collect(Collectors.toList());
             return Optional.of(new AnnotatedFeature(gherkinDocument.getFeature(),
-                                                    gherkinDocument.getFeature().getChildren(),
-                                                    descriptionInComments));
+                    scenarioList,
+                    descriptionInComments));
         } catch (Exception ex) {
             ex.printStackTrace();
             return Optional.empty();
         }
     }
 
+    private List<GherkinDocument> loadCucumberFeatures(List<String> listOfFiles) {
+        for (String cucumberFile : listOfFiles) {
+            searchForCucumberSyntaxErrorsIn(cucumberFile);
+        }
+        List<GherkinDocument> loadedFeatures = new ArrayList<>();
+        List<?> envelopes = getFeatures(listOfFiles)
+                .stream()
+                .flatMap(feature -> StreamSupport.stream(feature.getParseEvents().spliterator(), false))
+                .collect(Collectors.toList());
 
-    private List<CucumberFeature> loadCucumberFeatures(MultiLoader multiLoader, List<String> listOfFiles) {
-        try { //try to load cucumber-core 4.2.6
-            Class<?> featureLoaderClass = CucumberParser.class.getClassLoader().loadClass(CUCUMBER_4_FEATURE_LOADER);
-            Method load = featureLoaderClass.getMethod("load", List.class);
-            Object featureLoader = featureLoaderClass.getConstructor(ResourceLoader.class).newInstance(multiLoader);
-            List<URI> uriList = listOfFiles.stream().map(filePath->new File(filePath).toURI()).collect(Collectors.toList());
-            return  (List<CucumberFeature>)load.invoke(featureLoader,uriList);
-        } catch(ClassNotFoundException | NoSuchMethodException | IllegalAccessException | InstantiationException | InvocationTargetException cucumber426Exception) {
-            reportAnyCucumberSyntaxErrorsIn(cucumber426Exception);
+        List<GherkinDocument> gherkinDocuments = envelopes
+                .stream()
+                .filter(o -> ((Envelope) o).hasGherkinDocument())
+                .map(o -> ((Envelope) o).getGherkinDocument())
+                .collect(Collectors.toList());
 
-            LOGGER.debug("Found no Cucumber 4.2.x class " + CUCUMBER_4_FEATURE_LOADER + " trying Cucumber 4.8.0 ");
-            try { //try to load cucumber-core 4.8.0
-                Class<?> featureLoaderClass = CucumberParser.class.getClassLoader().loadClass(CUCUMBER_4_FEATURE_LOADER);
-                Method load = featureLoaderClass.getMethod("load", List.class);
-                Object featureLoader = featureLoaderClass.getConstructor(ResourceLoader.class).newInstance(multiLoader);
-                return (List<CucumberFeature>) load.invoke(featureLoader, listOfFiles);
-            } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException | InstantiationException | InvocationTargetException cucumber420Exception) {
-                reportAnyCucumberSyntaxErrorsIn(cucumber420Exception);
-
-                LOGGER.debug("Found no Cucumber 4.8.x class " + CUCUMBER_4_FEATURE_LOADER + " try Cucumber 2.x.x ");
-                try {
-                    Class<?> featureLoaderClass = CucumberParser.class.getClassLoader().loadClass(CUCUMBER_2_FEATURE_LOADER);
-                    Method load = featureLoaderClass.getMethod("load", ResourceLoader.class, List.class);
-                    return (List<CucumberFeature>) load.invoke(null, multiLoader, listOfFiles);
-                } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException | InvocationTargetException cucumber2Exception) {
-                    reportAnyCucumberSyntaxErrorsIn(cucumber2Exception);
-
-                    LOGGER.error("Found no Cucumber 2.x.x class " + CUCUMBER_2_FEATURE_LOADER + " failed loading CucumberFeatures ", cucumber2Exception);
-                    LOGGER.error("Found neither Cucumber 2.x.x nor Cucumber 4.x runtime in classpath");
-                    throw new RuntimeException("Found neither Cucumber 2.x.x nor Cucumber 4.x runtime in classpath", cucumber2Exception);
-                }
+        for (GherkinDocument gherkinDocument : gherkinDocuments) {
+            if (gherkinDocument.hasFeature()) {
+                loadedFeatures.add(gherkinDocument);
+                LOGGER.debug("Added feature {}", gherkinDocument.getFeature().getName());
+            } else {
+                LOGGER.warn("Couldn't read the feature file {} - it will be ignored", gherkinDocument.getUri());
             }
-        } catch(ParserException gherkinParsingException) {
-            LOGGER.error("Syntax error in feature file from " + listOfFiles,gherkinParsingException);
-            throw new RuntimeException("Syntax error in feature file from " + listOfFiles,gherkinParsingException);
+        }
+        return loadedFeatures;
+    }
+
+    private void searchForCucumberSyntaxErrorsIn(String cucumberFile) {
+        FeatureParser featureParser = new FeatureParser(UUID::randomUUID);
+        Path cucumberFilePath = new File(cucumberFile).toPath();
+
+        Resource cucumberResource = new URIResource(cucumberFilePath);
+        try {
+            featureParser.parseResource(cucumberResource);
+        } catch (Throwable throwable) {
+            reportAnyCucumberSyntaxErrorsIn(throwable);
         }
     }
 
-    private void reportAnyCucumberSyntaxErrorsIn(Throwable possibleGherkinSyntaxError) {
-        if (possibleGherkinSyntaxError instanceof InvocationTargetException) {
-            Throwable gherkinError = ((InvocationTargetException) possibleGherkinSyntaxError).getTargetException();
-            if (gherkinError instanceof CucumberException) {
-                throw new InvalidFeatureFileException(gherkinError.getMessage(), gherkinError);
-            }
+    private List<io.cucumber.core.gherkin.Feature> getFeatures(List<String> paths) {
+        FeatureParser featureParser = new FeatureParser(UUID::randomUUID);
+        List<io.cucumber.core.gherkin.Feature> results = new ArrayList<>();
+        paths.forEach(path -> {
+            Path cucumberFilePath = new File(path).toPath();
+            Resource cucumberResource = new URIResource(cucumberFilePath);
+            Optional<io.cucumber.core.gherkin.Feature> maybeFeature = featureParser.parseResource(cucumberResource);
+            maybeFeature.ifPresent(results::add);
+        });
+        return results;
+    }
+
+    private void reportAnyCucumberSyntaxErrorsIn(Throwable gherkinError) {
+        if (gherkinError instanceof FeatureParserException) {
+            throw new InvalidFeatureFileException(gherkinError.getMessage(), gherkinError);
         }
     }
+
 
     public Optional<Narrative> loadFeatureNarrative(File narrativeFile) {
 
@@ -160,28 +169,36 @@ public class CucumberParser {
 
         String id = getIdFromName(title);
 
-        Set<TestTag> requirementTags = feature.getTags().stream().map(tag -> TestTag.withValue(tag.getName())).collect(Collectors.toSet());
+        Set<TestTag> requirementTags = feature.getTagsList().stream().map(tag -> TestTag.withValue(tag.getName())).collect(Collectors.toSet());
         requirementTags.add(TestTag.withName(title).andType("feature"));
 
         // Scenario Tags
         Map<String, Collection<TestTag>> scenarioTags = new HashMap<>();
 
-        feature.getChildren().forEach(
-                scenarioDefinition -> {
-                    if (scenarioDefinition instanceof ScenarioOutline) {
-                        scenarioTags.put(scenarioDefinition.getName(), CucumberTagConverter.toSerenityTags(((ScenarioOutline) scenarioDefinition).getTags()));
-                        ((ScenarioOutline) scenarioDefinition).getExamples().forEach(
-                                example -> scenarioTags.put(scenarioDefinition.getName() + example.getLocation(),
-                                                            CucumberTagConverter.toSerenityTags(example.getTags()))
-                        );
-                    } else {
-                        scenarioTags.put(scenarioDefinition.getName(), tagsFrom(scenarioDefinition));
+        feature.getChildrenList().forEach(
+                child -> {
+                    if (child.hasScenario()) {
+                        Scenario scenarioDefinition = child.getScenario();
+                        if (scenarioDefinition.getExamplesCount() > 0) {
+                            List<Tag> scenarioOutlineTags = scenarioDefinition.getTagsList();
+                            scenarioTags.put(scenarioDefinition.getName(), CucumberTagConverter.toSerenityTags(scenarioOutlineTags));
+                            List<Examples> examples = scenarioDefinition.getExamplesList();
+                            for (Examples currentExample : examples) {
+                                List<Tag> allExampleTags = new ArrayList<>();
+                                allExampleTags.addAll(scenarioOutlineTags);
+                                allExampleTags.addAll(currentExample.getTagsList());
+                                scenarioTags.put(scenarioDefinition.getName() + "_examples_at_line:" + currentExample.getLocation().getLine(),
+                                        CucumberTagConverter.toSerenityTags(allExampleTags));
+                            }
+                        } else {
+                            scenarioTags.put(scenarioDefinition.getName(), tagsFrom(scenarioDefinition));
+                        }
                     }
                 }
         );
 
         // Scenario Names
-        List<String> scenarios = feature.getChildren().stream().map(ScenarioDefinition::getName).collect(Collectors.toList());
+        List<String> scenarios = feature.getChildrenList().stream().filter(FeatureChild::hasScenario).map(FeatureChild::getScenario).map(Scenario::getName).collect(Collectors.toList());
 
         return Optional.of(new Narrative(Optional.ofNullable(title),
                 Optional.ofNullable(id),
@@ -195,30 +212,30 @@ public class CucumberParser {
 
     }
 
-    private Collection<TestTag> tagsFrom(ScenarioDefinition scenarioDefinition) {
-        if (scenarioDefinition instanceof Scenario) {
-            return asSerenityTags(((Scenario) scenarioDefinition).getTags());
-        } else if (scenarioDefinition instanceof ScenarioOutline) {
-            Set<TestTag> outlineTags = new HashSet<>(asSerenityTags(((ScenarioOutline) scenarioDefinition).getTags()));
-            ((ScenarioOutline) scenarioDefinition).getExamples().forEach(
-                    examples -> outlineTags.addAll(asSerenityTags(examples.getTags()))
+    private Collection<TestTag> tagsFrom(Scenario scenarioDefinition) {
+        if (scenarioDefinition.getExamplesCount() == 0) {
+            return asSerenityTags(scenarioDefinition.getTagsList());
+        } else {
+            Set<TestTag> outlineTags = new HashSet<>(asSerenityTags(scenarioDefinition.getTagsList()));
+            scenarioDefinition.getExamplesList().forEach(
+                    examples -> outlineTags.addAll(asSerenityTags(examples.getTagsList()))
             );
             return outlineTags;
         }
-        return new ArrayList<>();
     }
 
-    private Set<TestTag> asSerenityTags(List<Tag> gherkinTags) {
+    private Set<TestTag> asSerenityTags(List<Feature.Tag> gherkinTags) {
         return gherkinTags.stream()
                 .map(tag -> TestTag.withValue(tag.getName()))
                 .collect(Collectors.toSet());
     }
+
     private String descriptionWithScenarioReferencesFrom(Feature feature) {
         if (feature.getDescription() == null) {
             return "";
         }
 
-        return stream(feature.getDescription().split("\\r?\\n"))
+        return Arrays.stream(feature.getDescription().split("\\r?\\n"))
                 .map(line -> DescriptionWithScenarioReferences.from(feature).forText(line))
                 .collect(Collectors.joining(lineSeparator()));
     }
@@ -228,12 +245,12 @@ public class CucumberParser {
         return name.replaceAll("[\\s_]", "-").toLowerCase();
     }
 
-    private boolean featureFileCouldNotBeReadFor(Feature feature) {
+    private boolean featureFileCouldNotBeReadFor(GherkinDocument.Feature feature) {
         return feature == null;
     }
 
     private List<Tag> tagsDefinedIn(Feature feature) {
-        return feature.getTags();
+        return feature.getTagsList();
     }
 
     private String findCardNumberInTags(List<Tag> tags) {

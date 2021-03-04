@@ -9,7 +9,6 @@ import net.thucydides.core.steps.StepEventBus;
 import net.thucydides.core.webdriver.Configuration;
 
 import java.lang.reflect.Method;
-import java.util.Arrays;
 import java.util.Optional;
 
 public class ScreenshotPermission {
@@ -21,13 +20,22 @@ public class ScreenshotPermission {
     }
 
 
+    public boolean areDisabledForThisAction() {
+        TakeScreenshots codeLevelScreenshotConfiguration
+                = stepMethodOverride().orElseGet(() -> methodOverride().orElse(taskOverride().orElse(classOverride().orElse(TakeScreenshots.UNDEFINED))));
+
+        return codeLevelScreenshotConfiguration == TakeScreenshots.DISABLED;
+    }
+
     public boolean areAllowed(TakeScreenshots takeScreenshots) {
 
-        TakeScreenshots configuredLevel= methodOverride()
-                .orElse(taskOverride()
-                        .orElse(classOverride()
-                                .orElse(configuration.getScreenshotLevel()
-                                        .orElse(TakeScreenshots.UNDEFINED))));
+        TakeScreenshots configuredLevel = stepMethodOverride()
+                .orElseGet(() -> methodOverride()
+                        .orElse(taskOverride()
+                                .orElse(classOverride()
+                                        .orElse(stepDefinitionOverride()
+                                                .orElse(configuration.getScreenshotLevel()
+                                                        .orElse(TakeScreenshots.UNDEFINED))))));
 
 
         if (configuredLevel != TakeScreenshots.UNDEFINED) {
@@ -45,6 +53,19 @@ public class ScreenshotPermission {
             return takeScreenshotLevel(takeScreenshots).isAtLeast(TakeScreenshots.FOR_EACH_ACTION);
         }
         return takeScreenshotLevel(takeScreenshots).isAtLeast(TakeScreenshots.BEFORE_AND_AFTER_EACH_STEP);
+    }
+
+    private Optional<TakeScreenshots> stepMethodOverride() {
+        if (StepEventBus.getEventBus().isBaseStepListenerRegistered()) {
+            Optional<Method> currentStepMethod = StepEventBus.getEventBus().getBaseStepListener().getCurrentStepMethod();
+            if (currentStepMethod != null && currentStepMethod.isPresent()) {
+                Optional<TakeScreenshots> overriddenScreenshotPreference = overriddenScreenshotPreferenceFor(currentStepMethod.get());
+                if (overriddenScreenshotPreference.isPresent()) {
+                    return overriddenScreenshotPreference;
+                }
+            }
+        }
+        return Optional.empty();
     }
 
     private Optional<TakeScreenshots> methodOverride() {
@@ -65,6 +86,13 @@ public class ScreenshotPermission {
             }
         }
         return Optional.empty();
+    }
+
+    private Optional<TakeScreenshots> stepDefinitionOverride() {
+        if (StepDefinitionAnnotations.getScreenshotPreferences() == TakeScreenshots.UNDEFINED) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(StepDefinitionAnnotations.getScreenshotPreferences());
     }
 
     private Optional<TakeScreenshots> classOverride() {
@@ -99,11 +127,11 @@ public class ScreenshotPermission {
             return Optional.of(screenshotLevelFrom(callingMethod.getAnnotation(Screenshots.class)));
         }
         // Is there a @Screenshots annotation on the Performable class
-        if (callingMethod.getDeclaringClass().getAnnotation(Screenshots.class) != null){
+        if (callingMethod.getDeclaringClass().getAnnotation(Screenshots.class) != null) {
             return Optional.of(screenshotLevelFrom(callingMethod.getDeclaringClass().getAnnotation(Screenshots.class)));
         }
         // Does the Performable have the IsSilent marker interface
-        if (isSilent(callingMethod.getDeclaringClass()) || isABackendOperation(callingMethod.getDeclaringClass())){
+        if (isSilent(callingMethod.getDeclaringClass()) || isABackendOperation(callingMethod.getDeclaringClass())) {
             return Optional.of(TakeScreenshots.DISABLED);
         }
 

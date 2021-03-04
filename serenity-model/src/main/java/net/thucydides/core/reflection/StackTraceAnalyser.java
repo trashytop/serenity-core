@@ -31,12 +31,20 @@ public class StackTraceAnalyser {
         try {
             if (allowedClassName(stackTraceElement.getClassName()) && !lambda(stackTraceElement.getClassName())) {
                 Class callingClass = Class.forName(stackTraceElement.getClassName());
+
+                if (stackTraceElement.getClassName().contains("$")) {
+                    callingClass = callingClass.getSuperclass();
+                    if (callingClass == null) {
+                        logger.trace("Ignored class without superclass: " + stackTraceElement.getClassName());
+                        return null;
+                    }
+                }
                 return extractMethod(stackTraceElement, callingClass);
             }
         } catch (ClassNotFoundException classNotFoundIgnored) {
-            logger.debug("Couldn't find class during Stack analysis: " + classNotFoundIgnored.getLocalizedMessage());
+            logger.trace("Couldn't find class during Stack analysis: " + classNotFoundIgnored.getLocalizedMessage());
         } catch (NoClassDefFoundError noClassDefFoundErrorIgnored) {
-            logger.debug("Couldn't find class definition during Stack analysis: " + noClassDefFoundErrorIgnored.getLocalizedMessage());
+            logger.trace("Couldn't find class definition during Stack analysis: " + noClassDefFoundErrorIgnored.getLocalizedMessage());
         }
         return null;
     }
@@ -85,7 +93,7 @@ public class StackTraceAnalyser {
     private final static List<String> HIDDEN_PACKAGES = NewList.of("sun.", "java", "org.gradle");
 
     private boolean allowedClassName(String className) {
-        if (className.contains("$")) {
+        if (className.contains("$$")) {
             return false;
         }
         if (inHiddenPackage(className)) {

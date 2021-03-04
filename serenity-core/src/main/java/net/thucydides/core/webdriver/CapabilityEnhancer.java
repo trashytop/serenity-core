@@ -1,6 +1,5 @@
 package net.thucydides.core.webdriver;
 
-import net.serenitybdd.core.webdriver.OverrideDriverCapabilities;
 import net.serenitybdd.core.webdriver.driverproviders.AddCustomDriverCapabilities;
 import net.serenitybdd.core.webdriver.driverproviders.AddEnvironmentSpecifiedDriverCapabilities;
 import net.thucydides.core.fixtureservices.FixtureProviderService;
@@ -29,8 +28,8 @@ public class CapabilityEnhancer {
 
     public DesiredCapabilities enhanced(DesiredCapabilities capabilities, SupportedWebDriver driver) {
         CapabilitySet capabilitySet = new CapabilitySet(environmentVariables);
-        addExtraCapabiities(capabilities, capabilitySet);
-        if (ACCEPT_INSECURE_CERTIFICATES.booleanFrom(environmentVariables,false)) {
+        addExtraCapabilities(capabilities, capabilitySet);
+        if (ACCEPT_INSECURE_CERTIFICATES.booleanFrom(environmentVariables, false)) {
             capabilities.acceptInsecureCerts();
         }
         addCapabilitiesFromFixtureServicesTo(capabilities);
@@ -39,9 +38,10 @@ public class CapabilityEnhancer {
 
         if (StepEventBus.getEventBus() != null && StepEventBus.getEventBus().isBaseStepListenerRegistered()) {
             Optional<TestOutcome> currentTestOutcome = StepEventBus.getEventBus()
-                                                         .getBaseStepListener()
-                                                         .latestTestOutcome();
-            if (currentTestOutcome != null) { // Technically not required but needed for some test scenarios
+                    .getBaseStepListener()
+                    .latestTestOutcome();
+            // Technically not required but needed for some test scenarios
+            if (currentTestOutcome != null) {
                 currentTestOutcome.ifPresent(
                         outcome -> AddCustomDriverCapabilities.from(environmentVariables)
                                 .withTestDetails(driver, outcome)
@@ -51,17 +51,17 @@ public class CapabilityEnhancer {
         }
 
         return capabilities;
-    }
+}
 
-    private void addExtraCapabiities(DesiredCapabilities capabilities, CapabilitySet capabilitySet) {
+    private void addExtraCapabilities(DesiredCapabilities capabilities, CapabilitySet capabilitySet) {
         Map<String, Object> extraCapabilities = capabilitySet.getCapabilities();
-        for(String capabilityName : extraCapabilities.keySet()) {
+        for (String capabilityName : extraCapabilities.keySet()) {
             capabilities.setCapability(capabilityName, extraCapabilities.get(capabilityName));
         }
     }
 
     private void addCapabilitiesFromFixtureServicesTo(DesiredCapabilities capabilities) {
-        for(FixtureService fixtureService : fixtureProviderService.getFixtureServices()) {
+        for (FixtureService fixtureService : fixtureProviderService.getFixtureServices()) {
             fixtureService.addCapabilitiesTo(capabilities);
         }
     }

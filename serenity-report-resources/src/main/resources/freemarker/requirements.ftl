@@ -277,11 +277,20 @@
 
                                         <#else>
 
-                                            <h3>Scenarios</h3>
+                                         <#list scenariosWithRule as scenarioWithRule>
+                                            <#if scenarioWithRule.ruleName?has_content>
+                                                  <h2>Rule: ${scenarioWithRule.ruleName}</h2>
+                                            </#if>
+                                            <#if scenarioWithRule.ruleDescription?has_content>
+                                                <div class="requirementNarrativeTitle">
+                                                       ${formatter.renderText(scenarioWithRule.ruleDescription)}
+                                                </div>
+                                            </#if>
 
+                                            <h3>Scenarios</h3>
                                             <div id="toc">
                                                 <table class="table" id="toc-table">
-                                                    <#list scenarios as scenario>
+                                                    <#list scenarioWithRule.scenarios as scenario>
                                                         <#assign outcome_icon = formatter.resultIcon().forResult(scenario.result) />
                                                         <tr>
                                                             <td style="width:95%;" class="toc-title">
@@ -324,7 +333,7 @@
                                             </div>
 
                                             <h3>Scenario details</h3>
-                                            <#list scenarios as scenario>
+                                            <#list scenarioWithRule.scenarios as scenario>
                                                 <#assign outcome_icon = formatter.resultIcon().forResult(scenario.result) />
 
                                                 <div class="scenario-docs card" id="${scenario.id}">
@@ -368,6 +377,7 @@
                                                         </div>
                                                     </div>
                                                 </div>
+                                            </#list>
                                             </#list>
                                         </#if>
                                         </div>

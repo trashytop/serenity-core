@@ -1,9 +1,6 @@
 package net.serenitybdd.core.webdriver.driverproviders;
 
 import com.google.common.base.Preconditions;
-
-import java.util.HashMap;
-
 import net.thucydides.core.ThucydidesSystemProperty;
 import net.thucydides.core.steps.StepEventBus;
 import net.thucydides.core.util.EnvironmentVariables;
@@ -11,8 +8,10 @@ import net.thucydides.core.webdriver.CapabilityEnhancer;
 import net.thucydides.core.webdriver.SupportedWebDriver;
 import org.apache.commons.lang3.StringUtils;
 import org.openqa.selenium.Platform;
+import org.openqa.selenium.edge.EdgeOptions;
 import org.openqa.selenium.remote.DesiredCapabilities;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import static net.thucydides.core.ThucydidesSystemProperty.*;
@@ -74,7 +73,7 @@ public class DriverCapabilities {
         selectors.put(HTMLUNIT, DesiredCapabilities::htmlUnit);
         selectors.put(OPERA, DesiredCapabilities::operaBlink);
         selectors.put(IEXPLORER, DesiredCapabilities::internetExplorer);
-        selectors.put(EDGE, DesiredCapabilities::edge);
+        selectors.put(EDGE, () -> new DesiredCapabilities(new EdgeOptions()));
         selectors.put(PHANTOMJS, DesiredCapabilities::phantomjs);
         selectors.put(IPHONE, DesiredCapabilities::iphone);
         selectors.put(ANDROID, DesiredCapabilities::android);

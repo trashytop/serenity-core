@@ -5,17 +5,16 @@ import net.thucydides.core.model.TestResult
 import net.thucydides.core.steps.BaseStepListener
 import net.thucydides.core.steps.StepEventBus
 import net.thucydides.core.util.EnvironmentVariables
-import org.junit.Rule
-import org.junit.rules.TemporaryFolder
 import spock.lang.Specification
+
+import java.nio.file.Files
 
 import static net.serenitybdd.screenplay.Tasks.instrumented
 import static net.thucydides.core.ThucydidesSystemProperty.MANUAL_TASK_INSTRUMENTATION
 
 class WhenInstrumentingTasks extends Specification {
 
-    @Rule
-    TemporaryFolder temporaryFolder
+
     File temporaryDirectory
     BaseStepListener listener = new BaseStepListener(temporaryDirectory)
     EnvironmentVariables environmentVariables;
@@ -24,7 +23,9 @@ class WhenInstrumentingTasks extends Specification {
     def setup() {
         environmentVariables = Injectors.getInjector().getInstance(EnvironmentVariables.class);
         currentManualInstrumentationSetting = environmentVariables.getPropertyAsBoolean(MANUAL_TASK_INSTRUMENTATION, false);
-        temporaryDirectory = temporaryFolder.newFolder()
+        temporaryDirectory = Files.createTempDirectory("tmp").toFile();
+        temporaryDirectory.deleteOnExit();
+
         StepEventBus.eventBus.clear()
         StepEventBus.eventBus.registerListener(listener)
         StepEventBus.eventBus.testStarted("some test")
@@ -92,6 +93,32 @@ class WhenInstrumentingTasks extends Specification {
             testPassed()
         and:
             testOutcomeContainsStep("Annie eats a large pear")
+    }
+
+    def "Tasks with the IsHidden marker interface will not be reported"() {
+
+        given:
+            Performable basicTask = new EatsAMango()
+        when:
+            Actor.named("Annie").attemptsTo(basicTask)
+        then:
+            testPassed()
+        and:
+            testOutcomeContainsNoSteps()
+    }
+
+    def "Nested tasks of a task having IsHidden marker interface will be reported"() {
+
+        given:
+            Performable nestedTask = new EatsAnApple()
+            Performable wrapperTask = new Eats(nestedTask)
+        when:
+            Actor.named("Annie").attemptsTo(wrapperTask)
+        then:
+            testPassed()
+        and:
+            testOutcomeDoesNotContainStep("Annie eats the given fruit")
+            testOutcomeContainsStep("Annie eats an apple")
     }
 
     def "Tasks with the IsSilent marker interface will not be reported"() {
@@ -178,6 +205,10 @@ class WhenInstrumentingTasks extends Specification {
 
     def testOutcomeContainsStep(String expectedDescription) {
         listener.latestTestOutcome().get().testSteps.find { step -> step.description == expectedDescription}
+    }
+
+    def testOutcomeDoesNotContainStep(String expectedDescription) {
+        listener.latestTestOutcome().get().testSteps.every { step -> step.description != expectedDescription}
     }
 
     def testOutcomeContainsNoSteps() {

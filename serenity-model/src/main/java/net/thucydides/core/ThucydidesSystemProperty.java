@@ -58,6 +58,11 @@ public enum ThucydidesSystemProperty {
     USE_CHROME_AUTOMATION_OPTIONS,
 
     /**
+     * If the automatic webdriver download should happen.
+     */
+    WEBDRIVER_AUTODOWNLOAD,
+
+    /**
      * The driver to be used for remote drivers
      */
     WEBDRIVER_REMOTE_DRIVER,
@@ -453,6 +458,10 @@ public enum ThucydidesSystemProperty {
      * Set to true to get WebDriver to maximise the Browser window before the tests are executed.
      */
     SERENITY_BROWSER_MAXIMIZED,
+    /**
+     * Set the browser o full screen mode before tests are executed
+     */
+    SERENITY_BROWSER_FULL_SCREEN,
 
     @Deprecated
     THUCYDIDES_RESIZED_IMAGE_WIDTH,
@@ -671,7 +680,7 @@ public enum ThucydidesSystemProperty {
     /**
      * Enable JQuery integration.
      * If set to true, JQuery will be injected into any page that does not already have it.
-     * This option is deactivated by default, as it can slow down page loading.
+     * This option is activated by default, deactivating can speed up the page loading.
      */
     SERENITY_JQUERY_INTEGRATION,
 
@@ -1022,6 +1031,11 @@ public enum ThucydidesSystemProperty {
     DELETE_HISTORY_DIRECTORY,
 
     /**
+     * Generate a CSV report for each test result (true by default)
+     */
+    SERENITY_GENERATE_CSV_REPORTS,
+
+    /**
      * Add extra columns to the CSV output, obtained from tag values.
      */
     SERENITY_CSV_EXTRA_COLUMNS,
@@ -1059,7 +1073,7 @@ public enum ThucydidesSystemProperty {
 
     /**
      * What format should test results be generated in.
-     * By default, this is "json,xml".
+     * By default, this is "json, html".
      */
     OUTPUT_FORMATS,
 
@@ -1120,6 +1134,11 @@ public enum ThucydidesSystemProperty {
      * screenshot page. This results in a loss of quality but a gain in disk space.
      */
     SERENITY_COMPRESS_SCREENSHOTS,
+
+    /**
+     * If set, Serenity will use full page screenshot strategy.
+     */
+    SERENITY_FULL_PAGE_SCREENSHOT_STRATEGY,
 
     /**
      * If set, this will define the list of tag types to be excluded from the dashboard screens
@@ -1596,7 +1615,6 @@ public enum ThucydidesSystemProperty {
         if (environmentVariables == null) { return defaultValue; }
 
         Optional<String> newPropertyValue = optionalPropertyValueDefinedIn(environmentVariables);
-//                = Optional.ofNullable(environmentVariables.getProperty(withSerenityPrefix(getPropertyName())));
 
         if (isDefined(newPropertyValue)) {
             return Boolean.valueOf(newPropertyValue.get().trim());
